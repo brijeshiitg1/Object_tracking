@@ -6,7 +6,7 @@ from engine.aoi_utils import AOIAnalyzer
 from database.mongo_database import MongoDatabase
 
 # Initialize detector and tracker
-od = ObjectDetection(model_path="models/yolov8n.pt")  
+od = ObjectDetection(model_path="models/yolo26n.pt")  
 mot = MultiObjectTracker()
 tracker = mot.ocsort(max_age=30, min_hits=3, iou_threshold=0.3)
 

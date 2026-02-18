@@ -43,7 +43,7 @@ class ObjectDetection:
         self.model = YOLO(model_path)
         print(f"Model loaded: {model_path}")
     
-    def detect(self, frame: np.ndarray, img_size: int = 640, conf: float = 0.25, 
+    def detect(self, frame: np.ndarray, img_size: int = 640, conf: float = 0.45, 
                iou: float = 0.45) -> Tuple[List, List, List]:
         """
         Perform object detection on a single frame.

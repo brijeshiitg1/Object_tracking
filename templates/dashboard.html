@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Object Detection & Tracking Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #080b14;  --surface:  #0f1320;  --surface2: #161b2e;
+      --surface3: #1d2438;  --border:   #252d45;
+      --primary:  #6366f1;  --primary-h:#818cf8;  --glow: rgba(99,102,241,.35);
+      --text:     #e2e8f0;  --muted:    #64748b;
+      --green:    #10b981;  --blue:     #3b82f6;  --orange: #f97316;
+      --purple:   #a855f7;  --yellow:   #eab308;  --pink: #ec4899;
+      --red:      #ef4444;  --radius:   14px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+
+    .app { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
+
+    /* ── Header ── */
+    header { display: flex; align-items: center; gap: 14px; margin-bottom: 36px; }
+    .logo-icon {
+      width: 48px; height: 48px; border-radius: 14px; flex-shrink: 0;
+      background: linear-gradient(135deg, var(--primary), #8b5cf6);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; box-shadow: 0 0 24px var(--glow);
+    }
+    .logo-text h1 {
+      font-size: 1.4rem; font-weight: 700;
+      background: linear-gradient(90deg, var(--primary-h), #c4b5fd);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .logo-text p { font-size: .8rem; color: var(--muted); }
+    .badge {
+      margin-left: auto; padding: 4px 12px; border-radius: 99px;
+      background: rgba(99,102,241,.15); border: 1px solid rgba(99,102,241,.3);
+      color: var(--primary-h); font-size: .72rem; font-weight: 600; letter-spacing: .04em;
+    }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 10px 22px; border-radius: 10px; border: none;
+      cursor: pointer; font-size: .88rem; font-weight: 600;
+      transition: transform .15s, box-shadow .15s, opacity .15s;
+    }
+    .btn:active   { transform: scale(.97); }
+    .btn:disabled { opacity: .45; cursor: not-allowed; pointer-events: none; }
+    .btn-primary { background: linear-gradient(135deg, var(--primary), #7c3aed); color:#fff; box-shadow: 0 4px 16px var(--glow); }
+    .btn-primary:hover  { box-shadow: 0 6px 24px var(--glow); }
+    .btn-ghost   { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+    .btn-ghost:hover    { background: var(--surface3); color: var(--text); }
+    .btn-success { background: linear-gradient(135deg, var(--green), #059669); color:#fff; box-shadow: 0 4px 16px rgba(16,185,129,.3); }
+    .btn-success:hover  { box-shadow: 0 6px 24px rgba(16,185,129,.4); }
+    .btn-danger  { background: rgba(239,68,68,.12); color: var(--red); border: 1px solid rgba(239,68,68,.25); }
+    .btn-danger:hover   { background: rgba(239,68,68,.2); }
+
+    /* ── Card ── */
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; }
+
+    /* ══════════════════════════════════════════════
+       1. UPLOAD SECTION
+    ══════════════════════════════════════════════ */
+    #drop-zone {
+      border: 2px dashed var(--border); border-radius: var(--radius);
+      padding: 60px 40px; text-align: center; cursor: pointer;
+      transition: border-color .25s, background .25s;
+    }
+    #drop-zone:hover, #drop-zone.drag-over {
+      border-color: var(--primary); background: rgba(99,102,241,.05);
+    }
+    #drop-zone .upload-icon { font-size: 3rem; margin-bottom: 16px; filter: drop-shadow(0 0 12px var(--glow)); }
+    #drop-zone h2  { font-size: 1.2rem; font-weight: 600; margin-bottom: 8px; }
+    #drop-zone p   { color: var(--muted); font-size: .875rem; margin-bottom: 24px; }
+    #file-input    { display: none; }
+    .format-tags   { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+    .tag { background: var(--surface2); border: 1px solid var(--border); color: var(--muted); font-size: .72rem; padding: 2px 10px; border-radius: 99px; }
+
+    /* ══════════════════════════════════════════════
+       2. AOI DRAWING SECTION
+    ══════════════════════════════════════════════ */
+    #aoi-section { display: none; }
+
+    .aoi-header { margin-bottom: 16px; }
+    .aoi-header h2 { font-size: 1.05rem; font-weight: 700; margin-bottom: 4px; }
+    .aoi-header p  { font-size: .82rem; color: var(--muted); }
+
+    .aoi-canvas-wrap {
+      position: relative;
+      background: #000;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 14px;
+      line-height: 0;   /* remove inline-block gap */
+    }
+
+    #aoi-thumbnail {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-radius: var(--radius);
+    }
+
+    #aoi-canvas {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%;
+      cursor: crosshair;
+      touch-action: none;
+    }
+
+    /* AOI point count badge */
+    .aoi-count-badge {
+      position: absolute; top: 12px; right: 12px;
+      background: rgba(0,0,0,.65);
+      color: var(--primary-h); font-size: .7rem; font-weight: 700;
+      padding: 3px 10px; border-radius: 99px;
+      pointer-events: none; z-index: 10;
+      letter-spacing: .04em;
+    }
+
+    /* Spinner shown while thumbnail loads */
+    .thumb-loading {
+      display: flex; align-items: center; justify-content: center;
+      min-height: 260px;
+    }
+    .spin-ring {
+      width: 40px; height: 40px; border-radius: 50%;
+      border: 3px solid transparent;
+      border-top-color: var(--primary); border-right-color: #8b5cf6;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .aoi-toolbar {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    }
+
+    .aoi-hint {
+      flex: 1; font-size: .8rem; color: var(--muted);
+      padding: 6px 0;
+    }
+    .aoi-hint.warn { color: var(--orange); }
+    .aoi-hint.ok   { color: var(--green); }
+
+    /* ══════════════════════════════════════════════
+       3. PROCESSING SECTION
+    ══════════════════════════════════════════════ */
+    #processing-section { display: none; }
+
+    /* Live MJPEG viewer */
+    .live-viewer {
+      position: relative; background: #000;
+      border: 1px solid var(--border); border-radius: var(--radius);
+      overflow: hidden; margin-bottom: 14px;
+      min-height: 180px; display: flex; align-items: center; justify-content: center;
+    }
+    #live-stream { width: 100%; max-height: 540px; object-fit: contain; display: block; }
+
+    .live-placeholder {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 12px; pointer-events: none;
+    }
+    .live-placeholder p { color: var(--muted); font-size: .875rem; }
+
+    /* LIVE badge */
+    .live-badge {
+      position: absolute; top: 12px; left: 12px; z-index: 10;
+      background: rgba(239,68,68,.88); color: #fff;
+      font-size: .68rem; font-weight: 800; letter-spacing: .08em;
+      padding: 3px 10px; border-radius: 99px;
+      display: flex; align-items: center; gap: 5px;
+      animation: blink-badge 2s ease-in-out infinite;
+    }
+    .live-dot { width: 6px; height: 6px; border-radius: 50%; background: #fff; }
+    @keyframes blink-badge { 0%,100%{opacity:1} 50%{opacity:.5} }
+
+    .frame-pct {
+      position: absolute; bottom: 10px; right: 12px; z-index: 10;
+      background: rgba(0,0,0,.6); color: var(--muted);
+      font-size: .7rem; font-weight: 600; padding: 2px 9px; border-radius: 99px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Image-mode spinner */
+    .img-spinner-card { padding: 48px; text-align: center; }
+    .tri-ring { position: relative; width: 64px; height: 64px; margin: 0 auto 20px; }
+    .tri-ring div {
+      position: absolute; inset: 0; border-radius: 50%;
+      border: 3px solid transparent; animation: spin 1.3s linear infinite;
+    }
+    .tr1 { border-top-color: var(--primary); }
+    .tr2 { border-right-color: #8b5cf6; animation-duration: 1.9s; inset: 8px; }
+    .tr3 { border-bottom-color: #06b6d4; animation-duration: 2.5s; inset: 16px; }
+
+    /* Progress info bar */
+    .proc-info {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 16px 20px 12px;
+    }
+    .proc-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .proc-title-row { display: flex; align-items: center; gap: 9px; }
+    .mini-spin {
+      width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0;
+      border: 2px solid transparent;
+      border-top-color: var(--primary); border-right-color: #8b5cf6;
+      animation: spin .8s linear infinite;
+    }
+    #proc-title    { font-size: .9rem; font-weight: 600; }
+    #proc-subtitle { font-size: .78rem; color: var(--muted); }
+
+    .prog-track  { height: 6px; background: var(--surface3); border-radius: 99px; overflow: hidden; margin-bottom: 5px; }
+    #prog-fill   {
+      height: 100%; width: 0%;
+      background: linear-gradient(90deg, var(--primary), #7c3aed, #06b6d4);
+      background-size: 200%; border-radius: 99px;
+      transition: width .4s ease;
+      animation: shimmer 2s linear infinite;
+    }
+    @keyframes shimmer { 0%{background-position:0% 50%} 100%{background-position:200% 50%} }
+    #prog-pct { text-align: right; font-size: .76rem; color: var(--muted); margin-bottom: 10px; font-variant-numeric: tabular-nums; }
+
+    .live-pills  { display: flex; flex-wrap: wrap; gap: 7px; }
+    .live-pill   {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 99px; padding: 3px 11px;
+      font-size: .76rem; font-weight: 600;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .live-pill .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .pill-aoi { color: var(--orange); font-weight: 700; }
+
+    /* ══════════════════════════════════════════════
+       4. RESULTS SECTION
+    ══════════════════════════════════════════════ */
+    #results-section { display: none; }
+
+    .results-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+    .results-header h2 { font-size: 1.05rem; font-weight: 700; }
+    .action-row { display: flex; gap: 10px; flex-wrap: wrap; }
+
+    /* Stats grid */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); gap: 12px; margin-bottom: 24px; }
+
+    .stat-card {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 12px; padding: 16px 14px;
+      position: relative; overflow: hidden;
+      transition: transform .2s;
+    }
+    .stat-card:hover { transform: translateY(-2px); }
+    .stat-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: var(--accent, var(--primary)); border-radius: 12px 12px 0 0;
+    }
+    .stat-icon  { font-size: 1.5rem; margin-bottom: 6px; }
+    .stat-main  { font-size: 2rem; font-weight: 800; line-height: 1; margin-bottom: 2px; color: var(--accent, var(--text)); }
+    .stat-sub   { font-size: .72rem; color: var(--muted); margin-bottom: 3px; }
+    .stat-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+    .stat-bar-track { margin-top: 10px; height: 4px; background: var(--surface3); border-radius: 99px; overflow: hidden; }
+    .stat-bar-fill  { height: 100%; background: var(--accent, var(--primary)); border-radius: 99px; transition: width .7s cubic-bezier(.4,0,.2,1); }
+
+    /* AOI active indicator tag */
+    .aoi-tag {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: rgba(249,115,22,.12); border: 1px solid rgba(249,115,22,.3);
+      color: var(--orange); font-size: .72rem; font-weight: 700;
+      padding: 2px 10px; border-radius: 99px;
+    }
+
+    /* Result viewer */
+    .viewer-card { background: #000; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 20px; min-height: 200px; display: flex; align-items: center; justify-content: center; }
+    #result-video { width: 100%; max-height: 560px; display: none; outline: none; }
+    #result-image { width: 100%; max-height: 560px; object-fit: contain; display: none; }
+    .viewer-ph    { color: var(--muted); font-size: .875rem; }
+
+    .divider { height: 1px; background: var(--border); margin: 24px 0; }
+
+    /* ══════════════════════════════════════════════
+       5. ERROR SECTION
+    ══════════════════════════════════════════════ */
+    #error-section { display: none; }
+    .err-card { background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.3); border-radius: var(--radius); padding: 28px; text-align: center; }
+    .err-card .err-icon { font-size: 2.5rem; margin-bottom: 12px; }
+    .err-card h3        { color: var(--red); margin-bottom: 8px; }
+    .err-card pre       { text-align: left; background: var(--surface2); border-radius: 8px; padding: 12px; font-size: .72rem; color: var(--muted); overflow: auto; max-height: 200px; margin: 12px 0; }
+
+    @media (max-width: 600px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } #drop-zone { padding: 40px 20px; } }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ── Header ── -->
+  <header>
+    <div class="logo-icon">🎯</div>
+    <div class="logo-text">
+      <h1>Detection and Tracking Dashboard</h1>
+      <p>Detection · Tracking · AOI Counting</p>
+    </div>
+    <span class="badge">Detection and Tracking</span>
+  </header>
+
+  <!-- ════════════════════════════════════════════
+       1. UPLOAD
+  ════════════════════════════════════════════ -->
+  <section id="upload-section">
+    <div id="drop-zone">
+      <div class="upload-icon">📂</div>
+      <h2>Drop a video or image here</h2>
+      <p>Drag & drop, or click the button below to browse</p>
+      <button class="btn btn-primary" onclick="document.getElementById('file-input').click()">⬆️ &nbsp;Choose File</button>
+      <input type="file" id="file-input"
+        accept="video/mp4,video/avi,video/quicktime,video/x-matroska,video/webm,video/x-flv,video/x-msvideo,image/jpeg,image/png,image/bmp,image/webp"/>
+      <div class="format-tags">
+        <span class="tag">MP4</span><span class="tag">AVI</span><span class="tag">MOV</span>
+        <span class="tag">MKV</span><span class="tag">WebM</span>
+        <span class="tag">JPG</span><span class="tag">PNG</span><span class="tag">WebP</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════
+       2. AOI DRAWING STEP
+  ════════════════════════════════════════════ -->
+  <section id="aoi-section">
+    <div class="aoi-header">
+      <h2>📍 Draw Detection Zone (optional)</h2>
+      <p>Click on the frame to place polygon vertices. Leave empty to detect everywhere.</p>
+    </div>
+
+    <div class="aoi-canvas-wrap" id="aoi-wrap">
+      <!-- Thumbnail loading spinner -->
+      <div class="thumb-loading" id="thumb-loading">
+        <div class="spin-ring"></div>
+      </div>
+      <!-- Actual frame (hidden until loaded) -->
+      <img id="aoi-thumbnail" style="display:none" alt="frame for AOI"/>
+      <!-- Canvas overlay -->
+      <canvas id="aoi-canvas" style="display:none"></canvas>
+      <!-- Point counter -->
+      <div class="aoi-count-badge" id="aoi-count-badge" style="display:none">0 pts</div>
+    </div>
+
+    <div class="aoi-toolbar">
+      <button class="btn btn-danger" id="aoi-clear-btn" onclick="clearAOI()" style="display:none">🗑 Clear</button>
+      <span class="aoi-hint" id="aoi-hint">Loading frame…</span>
+      <button class="btn btn-ghost"    id="aoi-skip-btn"  onclick="startDetection(false)">Skip AOI</button>
+      <button class="btn btn-primary"  id="aoi-start-btn" onclick="startDetection(true)" disabled>▶ Start Detection</button>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════
+       3. PROCESSING
+  ════════════════════════════════════════════ -->
+  <section id="processing-section">
+
+    <!-- VIDEO: live MJPEG stream -->
+    <div id="live-viewer" class="live-viewer" style="display:none">
+      <div class="live-placeholder" id="live-ph">
+        <div class="spin-ring"></div>
+        <p>Waiting for first frame…</p>
+      </div>
+      <img id="live-stream" alt="live" style="display:none" onload="onFirstFrame()"/>
+      <div class="live-badge"><div class="live-dot"></div>LIVE</div>
+      <div class="frame-pct" id="frame-pct">0%</div>
+    </div>
+
+    <!-- IMAGE: spinner card -->
+    <div id="img-spinner" class="card img-spinner-card" style="display:none">
+      <div class="tri-ring"><div class="tr1"></div><div class="tr2"></div><div class="tr3"></div></div>
+      <p style="font-weight:600; margin-bottom:4px">Detecting objects…</p>
+      <p style="font-size:.8rem; color:var(--muted)">Running YOLOv8 on your image</p>
+    </div>
+
+    <!-- Progress info (shared) -->
+    <div class="proc-info">
+      <div class="proc-header">
+        <div class="proc-title-row">
+          <div class="mini-spin"></div>
+          <span id="proc-title">Analysing…</span>
+        </div>
+        <span id="proc-subtitle" style="font-size:.78rem;color:var(--muted)"></span>
+      </div>
+      <div class="prog-track"><div id="prog-fill"></div></div>
+      <div id="prog-pct">0%</div>
+      <div class="live-pills" id="live-pills"></div>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════
+       4. RESULTS
+  ════════════════════════════════════════════ -->
+  <section id="results-section">
+    <div class="results-header">
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+        <h2>📊 Detection Results</h2>
+        <span class="aoi-tag" id="aoi-tag" style="display:none">📍 AOI active</span>
+      </div>
+      <div class="action-row">
+        <button class="btn btn-success" onclick="downloadResult()">⬇️ Download</button>
+        <button class="btn btn-ghost"   onclick="resetToUpload()">↩ New Upload</button>
+      </div>
+    </div>
+    <div class="stats-grid" id="stats-grid"></div>
+    <div class="divider"></div>
+    <div class="viewer-card">
+      <video id="result-video" controls playsinline></video>
+      <img   id="result-image" alt="result"/>
+      <p class="viewer-ph" id="viewer-ph">Loading…</p>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════
+       5. ERROR
+  ════════════════════════════════════════════ -->
+  <section id="error-section">
+    <div class="err-card">
+      <div class="err-icon">⚠️</div>
+      <h3>Processing Failed</h3>
+      <pre id="error-msg"></pre>
+      <button class="btn btn-ghost" onclick="resetToUpload()">↩ Try Again</button>
+    </div>
+  </section>
+
+</div><!-- /app -->
+
+<script>
+/* ─────────────────────────────────────────────────────────────────────────────
+   Class metadata
+───────────────────────────────────────────────────────────────────────────── */
+const CLASS_META = {
+  person:     { icon:'👤', color:'#3b82f6', label:'People'       },
+  car:        { icon:'🚗', color:'#10b981', label:'Cars'         },
+  truck:      { icon:'🚛', color:'#f97316', label:'Trucks'       },
+  motorcycle: { icon:'🏍️', color:'#a855f7', label:'Motorcycles'  },
+  bus:        { icon:'🚌', color:'#eab308', label:'Buses'        },
+  bicycle:    { icon:'🚲', color:'#ec4899', label:'Bicycles'     },
+};
+const TOTAL_META = { icon:'📊', color:'#6366f1', label:'Total' };
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   State
+───────────────────────────────────────────────────────────────────────────── */
+let currentJobId   = null;
+let currentType    = null;
+let pollTimer      = null;
+let lastStats      = {};
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   DOM refs
+───────────────────────────────────────────────────────────────────────────── */
+const $ = id => document.getElementById(id);
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Upload drag & drop
+───────────────────────────────────────────────────────────────────────────── */
+const dropZone = $('drop-zone');
+dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('drag-over');
+  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+$('file-input').addEventListener('change', function() {
+  if (this.files[0]) handleFile(this.files[0]);
+  this.value = '';
+});
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Step 1: Upload file → go to AOI step
+───────────────────────────────────────────────────────────────────────────── */
+async function handleFile(file) {
+  showSection('aoi');
+
+  // Reset AOI canvas state
+  aoiPoints = []; mouseXY = null; isLoaded = false;
+  $('aoi-thumbnail').style.display  = 'none';
+  $('aoi-canvas').style.display     = 'none';
+  $('aoi-count-badge').style.display = 'none';
+  $('aoi-clear-btn').style.display  = 'none';
+  $('thumb-loading').style.display  = 'flex';
+  $('aoi-hint').textContent = 'Uploading…';
+  $('aoi-hint').className   = 'aoi-hint';
+  $('aoi-skip-btn').disabled  = true;
+  $('aoi-start-btn').disabled = true;
+
+  const fd = new FormData();
+  fd.append('file', file);
+
+  let resp, data;
+  try {
+    resp = await fetch('/upload', { method:'POST', body:fd });
+    data = await resp.json();
+  } catch(e) {
+    showError('Network error: ' + e);
+    return;
+  }
+  if (!resp.ok || data.error) { showError(data.error || 'Upload failed'); return; }
+
+  currentJobId = data.job_id;
+  currentType  = data.file_type;
+
+  // Load thumbnail for AOI drawing
+  loadThumbnail(data.job_id);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Load first-frame thumbnail for AOI canvas
+───────────────────────────────────────────────────────────────────────────── */
+function loadThumbnail(jobId) {
+  const img = $('aoi-thumbnail');
+  img.onload = () => {
+    $('thumb-loading').style.display  = 'none';
+    img.style.display = 'block';
+    requestAnimationFrame(() => {
+      syncCanvas();
+      $('aoi-canvas').style.display      = 'block';
+      $('aoi-count-badge').style.display = 'block';
+      $('aoi-skip-btn').disabled  = false;
+      $('aoi-start-btn').disabled = false;
+      isLoaded = true;
+      updateHint();
+    });
+  };
+  img.onerror = () => {
+    $('thumb-loading').style.display = 'none';
+    $('aoi-hint').textContent = '⚠️ Could not load preview – you can still start without AOI';
+    $('aoi-skip-btn').disabled  = false;
+    $('aoi-start-btn').disabled = false;
+  };
+  img.src = `/thumbnail/${jobId}?t=${Date.now()}`;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   AOI Drawing
+───────────────────────────────────────────────────────────────────────────── */
+let aoiPoints  = [];      // [{nx, ny}] normalized 0-1
+let mouseXY    = null;    // {x, y} in canvas px
+let isLoaded   = false;
+
+const aoiThumb  = $('aoi-thumbnail');
+const aoiCanvas = $('aoi-canvas');
+const aoiCtx    = aoiCanvas.getContext('2d');
+
+/** Sync canvas internal resolution to displayed size */
+function syncCanvas() {
+  const rect = aoiThumb.getBoundingClientRect();
+  if (rect.width  > 0 && aoiCanvas.width  !== Math.round(rect.width))  aoiCanvas.width  = Math.round(rect.width);
+  if (rect.height > 0 && aoiCanvas.height !== Math.round(rect.height)) aoiCanvas.height = Math.round(rect.height);
+}
+
+function toCanvasPx(np) {
+  return { x: np.nx * aoiCanvas.width, y: np.ny * aoiCanvas.height };
+}
+
+function redrawAOI(mx, my) {
+  aoiCtx.clearRect(0, 0, aoiCanvas.width, aoiCanvas.height);
+  if (aoiPoints.length === 0) return;
+
+  const pts = aoiPoints.map(toCanvasPx);
+
+  /* ── Polygon fill (3+pts) ── */
+  if (pts.length >= 3) {
+    aoiCtx.beginPath();
+    aoiCtx.moveTo(pts[0].x, pts[0].y);
+    pts.slice(1).forEach(p => aoiCtx.lineTo(p.x, p.y));
+    aoiCtx.closePath();
+    aoiCtx.fillStyle = 'rgba(99,102,241,0.18)';
+    aoiCtx.fill();
+  }
+
+  /* ── Polygon border ── */
+  if (pts.length >= 2) {
+    aoiCtx.beginPath();
+    aoiCtx.moveTo(pts[0].x, pts[0].y);
+    pts.slice(1).forEach(p => aoiCtx.lineTo(p.x, p.y));
+    if (pts.length >= 3) aoiCtx.closePath();
+    aoiCtx.strokeStyle = '#6366f1';
+    aoiCtx.lineWidth   = 2;
+    aoiCtx.setLineDash([]);
+    aoiCtx.stroke();
+  }
+
+  /* ── Preview line to cursor ── */
+  if (mx != null && pts.length >= 1) {
+    const last = pts[pts.length - 1];
+    aoiCtx.beginPath();
+    aoiCtx.moveTo(last.x, last.y);
+    aoiCtx.lineTo(mx, my);
+    aoiCtx.strokeStyle = 'rgba(99,102,241,0.45)';
+    aoiCtx.lineWidth   = 1.5;
+    aoiCtx.setLineDash([6, 4]);
+    aoiCtx.stroke();
+    aoiCtx.setLineDash([]);
+  }
+
+  /* ── Vertex dots ── */
+  pts.forEach((p, i) => {
+    // Pulsing "close" ring on first point when 3+ pts exist
+    if (i === 0 && pts.length >= 3) {
+      aoiCtx.beginPath();
+      aoiCtx.arc(p.x, p.y, 18, 0, Math.PI * 2);
+      aoiCtx.strokeStyle = 'rgba(249,115,22,0.4)';
+      aoiCtx.lineWidth   = 1.5;
+      aoiCtx.setLineDash([4, 3]);
+      aoiCtx.stroke();
+      aoiCtx.setLineDash([]);
+    }
+    // Dot
+    aoiCtx.beginPath();
+    aoiCtx.arc(p.x, p.y, i === 0 ? 8 : 6, 0, Math.PI * 2);
+    aoiCtx.fillStyle   = i === 0 ? '#f97316' : '#6366f1';
+    aoiCtx.fill();
+    aoiCtx.strokeStyle = 'rgba(255,255,255,0.85)';
+    aoiCtx.lineWidth   = 1.5;
+    aoiCtx.stroke();
+    // Number label inside dot
+    aoiCtx.font          = `bold ${i===0 ? 11 : 10}px sans-serif`;
+    aoiCtx.fillStyle     = '#fff';
+    aoiCtx.textAlign     = 'center';
+    aoiCtx.textBaseline  = 'middle';
+    aoiCtx.fillText(i + 1, p.x, p.y);
+  });
+}
+
+/* Add point on click */
+aoiCanvas.addEventListener('click', e => {
+  if (!isLoaded) return;
+  syncCanvas();
+  const rect = aoiCanvas.getBoundingClientRect();
+  const x  = e.clientX - rect.left;
+  const y  = e.clientY - rect.top;
+  const nx = x / aoiCanvas.width;
+  const ny = y / aoiCanvas.height;
+
+  // Click within 18px of first point (≥3 pts) → remove last "extra" click (already registered)
+  if (aoiPoints.length >= 3) {
+    const fp  = toCanvasPx(aoiPoints[0]);
+    const dist = Math.hypot(x - fp.x, y - fp.y);
+    if (dist < 18) {
+      // Just close visually – the polygon is already implied closed
+      redrawAOI();
+      updateHint();
+      return;
+    }
+  }
+
+  aoiPoints.push({ nx, ny });
+  redrawAOI(x, y);
+  updateHint();
+});
+
+/* Preview line on mouse move */
+aoiCanvas.addEventListener('mousemove', e => {
+  if (!isLoaded || aoiPoints.length === 0) return;
+  const rect = aoiCanvas.getBoundingClientRect();
+  mouseXY = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  redrawAOI(mouseXY.x, mouseXY.y);
+});
+
+aoiCanvas.addEventListener('mouseleave', () => {
+  mouseXY = null;
+  redrawAOI();
+});
+
+/* Right-click → clear */
+aoiCanvas.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  clearAOI();
+});
+
+/* Keep canvas in sync on window resize */
+window.addEventListener('resize', () => {
+  if ($('aoi-section').style.display !== 'none' && isLoaded) {
+    syncCanvas();
+    redrawAOI(mouseXY?.x, mouseXY?.y);
+  }
+});
+
+function clearAOI() {
+  aoiPoints = []; mouseXY = null;
+  syncCanvas();
+  aoiCtx.clearRect(0, 0, aoiCanvas.width, aoiCanvas.height);
+  updateHint();
+}
+
+function updateHint() {
+  const n     = aoiPoints.length;
+  const hint  = $('aoi-hint');
+  const badge = $('aoi-count-badge');
+  const clrBtn = $('aoi-clear-btn');
+
+  badge.textContent    = n === 0 ? '0 pts' : `${n} pt${n>1?'s':''}`;
+  clrBtn.style.display = n > 0 ? '' : 'none';
+
+  if (n === 0) {
+    hint.textContent = 'Click anywhere on the frame to start drawing your detection zone';
+    hint.className   = 'aoi-hint';
+    $('aoi-start-btn').textContent = '⬜ Start (no zone)';
+    $('aoi-start-btn').disabled    = false;
+  } else if (n < 3) {
+    hint.textContent = `${n} point${n>1?'s':''} — need at least 3 for a zone`;
+    hint.className   = 'aoi-hint warn';
+    $('aoi-start-btn').textContent = '▶ Start Detection';
+    $('aoi-start-btn').disabled    = true;
+  } else {
+    hint.textContent = `✅ ${n}-point zone ready — click the 🟠 first point to close, or keep adding`;
+    hint.className   = 'aoi-hint ok';
+    $('aoi-start-btn').textContent = `▶ Start with ${n}-pt Zone`;
+    $('aoi-start-btn').disabled    = false;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Step 2: Start detection (with or without AOI)
+───────────────────────────────────────────────────────────────────────────── */
+async function startDetection(useAOI) {
+  const points = (useAOI && aoiPoints.length >= 3)
+                 ? aoiPoints.map(p => [p.nx, p.ny])
+                 : null;
+
+  showSection('processing');
+
+  const isVideo = currentType === 'video';
+  $('live-viewer').style.display = isVideo ? 'block' : 'none';
+  $('img-spinner').style.display = isVideo ? 'none'  : 'block';
+
+  $('proc-title').textContent    = isVideo ? 'Detecting & tracking objects…' : 'Detecting objects…';
+  $('proc-subtitle').textContent = points
+    ? `AOI active · Detection + Tracking`
+    : (isVideo ? 'Detection + Tracking on every frame' : '');
+  setProgress(0);
+  $('live-pills').innerHTML = '';
+  lastStats = {};
+
+  if (isVideo) {
+    const liveImg = $('live-stream');
+    liveImg.style.display = 'none';
+    $('live-ph').style.display = 'flex';
+    liveImg.src = `/stream/${currentJobId}`;
+  }
+
+  // POST to /start
+  let resp, data;
+  try {
+    resp = await fetch(`/start/${currentJobId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ aoi: points }),
+    });
+    data = await resp.json();
+  } catch(e) {
+    showError('Network error: ' + e);
+    return;
+  }
+  if (!resp.ok || data.error) { showError(data.error || 'Start failed'); return; }
+
+  startPolling(currentJobId);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Called when first MJPEG frame arrives
+───────────────────────────────────────────────────────────────────────────── */
+function onFirstFrame() {
+  $('live-ph').style.display      = 'none';
+  $('live-stream').style.display  = 'block';
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Polling
+───────────────────────────────────────────────────────────────────────────── */
+function startPolling(jobId) {
+  clearPolling();
+  pollTimer = setInterval(() => pollStatus(jobId), 900);
+}
+function clearPolling() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+}
+
+async function pollStatus(jobId) {
+  let data;
+  try {
+    const r = await fetch(`/status/${jobId}`);
+    data = await r.json();
+  } catch { return; }
+
+  setProgress(data.progress || 0);
+  if (data.stats && Object.keys(data.stats).length)
+    updateLivePills(data.stats, data.aoi_stats || {}, data.has_aoi);
+
+  if (data.status === 'done') {
+    clearPolling();
+    showResults(jobId, data);
+  } else if (data.status === 'error') {
+    clearPolling();
+    showError(data.error || 'Unknown error');
+  }
+}
+
+function setProgress(pct) {
+  $('prog-fill').style.width = pct + '%';
+  $('prog-pct').textContent  = pct + '%';
+  $('frame-pct').textContent = pct + '%';
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Live stat pills during processing
+───────────────────────────────────────────────────────────────────────────── */
+function updateLivePills(stats, aoiStats, hasAoi) {
+  const key = JSON.stringify({stats, aoiStats});
+  if (key === JSON.stringify(lastStats)) return;
+  lastStats = {stats, aoiStats};
+
+  const container = $('live-pills');
+  container.innerHTML = '';
+  for (const [cls, count] of Object.entries(stats)) {
+    if (!count) continue;
+    const m    = CLASS_META[cls] || { icon:'🔍', color:'#6366f1' };
+    const pill = document.createElement('div');
+    pill.className = 'live-pill';
+    const aoiCount = hasAoi ? (aoiStats[cls] || 0) : null;
+    pill.innerHTML =
+      `<span class="dot" style="background:${m.color}"></span>${m.icon} ${cls}: <strong>${count}</strong>` +
+      (aoiCount !== null ? ` <span class="pill-aoi">(${aoiCount} in zone)</span>` : '');
+    container.appendChild(pill);
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Show results
+───────────────────────────────────────────────────────────────────────────── */
+function showResults(jobId, data) {
+  $('live-stream').src = '';
+  setProgress(100);
+
+  const hasAoi = data.has_aoi;
+  $('aoi-tag').style.display = hasAoi ? 'inline-flex' : 'none';
+
+  renderStatsGrid(data.stats || {}, data.aoi_stats || {}, hasAoi);
+  loadPreview(jobId, data.file_type);
+  showSection('results');
+}
+
+function renderStatsGrid(stats, aoiStats, hasAoi) {
+  const grid  = $('stats-grid');
+  grid.innerHTML = '';
+
+  // Use AOI stats as primary number if AOI is active
+  const primary = hasAoi ? aoiStats : stats;
+  const total   = Object.values(primary).reduce((a, b) => a + b, 0);
+
+  for (const cls of Object.keys(stats)) {
+    const count     = primary[cls] || 0;
+    const totalAll  = stats[cls]   || 0;
+    const m         = CLASS_META[cls] || { icon:'🔍', color:'#6366f1', label: cls };
+    const pct       = total ? Math.round((count / total) * 100) : 0;
+    grid.appendChild(makeStatCard(m.icon, count, m.label, m.color, pct,
+                                  hasAoi ? totalAll : null));
+  }
+  if (total > 0)
+    grid.appendChild(makeStatCard(TOTAL_META.icon, total, TOTAL_META.label,
+                                  TOTAL_META.color, 100, null));
+
+  grid.querySelectorAll('.stat-main').forEach(el =>
+    animateCount(el, 0, +el.dataset.target, 700));
+}
+
+function makeStatCard(icon, count, label, color, barPct, totalAll) {
+  const card = document.createElement('div');
+  card.className = 'stat-card';
+  card.style.setProperty('--accent', color);
+  const subHtml = totalAll !== null
+    ? `<div class="stat-sub">${totalAll} total seen</div>`
+    : '';
+  card.innerHTML = `
+    <div class="stat-icon">${icon}</div>
+    <div class="stat-main" data-target="${count}">0</div>
+    ${subHtml}
+    <div class="stat-label">${label}</div>
+    <div class="stat-bar-track"><div class="stat-bar-fill" style="width:${barPct}%"></div></div>`;
+  return card;
+}
+
+function animateCount(el, from, to, dur) {
+  const start = performance.now();
+  const tick  = now => {
+    const t = Math.min((now - start) / dur, 1);
+    el.textContent = Math.round(from + (to - from) * easeInOut(t));
+    if (t < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+const easeInOut = t => t < .5 ? 2*t*t : -1+(4-2*t)*t;
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Result preview
+───────────────────────────────────────────────────────────────────────────── */
+function loadPreview(jobId, fileType) {
+  const url = `/preview/${jobId}?t=${Date.now()}`;
+  const vid = $('result-video'), img = $('result-image'), ph = $('viewer-ph');
+  vid.style.display = img.style.display = 'none';
+  ph.style.display  = 'block';
+
+  if (fileType === 'video') {
+    vid.src = url; vid.style.display = 'block'; ph.style.display = 'none';
+  } else {
+    img.onload  = () => { img.style.display = 'block'; ph.style.display = 'none'; };
+    img.onerror = () => { ph.textContent = '⚠️ Could not load preview'; };
+    img.src = url;
+  }
+}
+
+function downloadResult() {
+  if (!currentJobId) return;
+  const a = document.createElement('a');
+  a.href = `/download/${currentJobId}`;
+  a.click();
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Error + section manager + reset
+───────────────────────────────────────────────────────────────────────────── */
+function showError(msg) {
+  $('error-msg').textContent = msg;
+  showSection('error');
+}
+
+function showSection(name) {
+  $('upload-section').style.display     = name === 'upload'     ? ''      : 'none';
+  $('aoi-section').style.display        = name === 'aoi'        ? 'block' : 'none';
+  $('processing-section').style.display = name === 'processing' ? 'block' : 'none';
+  $('results-section').style.display    = name === 'results'    ? 'block' : 'none';
+  $('error-section').style.display      = name === 'error'      ? 'block' : 'none';
+}
+
+function resetToUpload() {
+  clearPolling();
+  $('live-stream').src = '';
+  $('result-video').src = $('result-image').src = '';
+  $('stats-grid').innerHTML = $('live-pills').innerHTML = '';
+  $('live-ph').style.display = 'flex';
+  $('live-stream').style.display = 'none';
+  setProgress(0);
+  aoiPoints = []; mouseXY = null; isLoaded = false;
+  currentJobId = currentType = null;
+  lastStats = {};
+  showSection('upload');
+}
+</script>
+</body>
+</html>

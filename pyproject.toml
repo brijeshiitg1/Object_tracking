@@ -8,4 +8,7 @@ dependencies = [
     "opencv-python>=4.13.0.92",
     "pymongo>=4.16.0",
     "ultralytics>=8.4.12",
+    "flask>=3.0.0",
+    "flask-cors>=4.0.0",
+    "scipy>=1.11.0",
 ]
